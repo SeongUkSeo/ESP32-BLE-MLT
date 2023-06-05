@@ -28,4 +28,21 @@ def index():
                 </script>
             </body>
         </html>
-    """)
+    """)@app.route('/led', methods=['POST'])
+def led_control():
+    state = request.form.get('state')
+    if state in ['ON', 'OFF']:
+        try:
+            response = requests.get(f"http://{ESP32_IP}/led?state={state}")
+            response.raise_for_status()
+            return "LED state changed successfully", 200
+        except requests.exceptions.HTTPError as errh:
+            return f"Http Error: {errh}", 500
+        except requests.exceptions.ConnectionError as errc:
+            return f"Error Connecting: {errc}", 500
+        except requests.exceptions.Timeout as errt:
+            return f"Timeout Error: {errt}", 500
+        except requests.exceptions.RequestException as err:
+            return f"Something went wrong: {err}", 500
+    else:
+        return "Invalid state. Please send 'ON' or 'OFF'.", 400
