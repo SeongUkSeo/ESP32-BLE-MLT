@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:sqflite/sqflite.dart';
 import 'dart:io';
 
-void main() {
-  runApp(MyApp());
-}
+void main() => runApp(MyApp());
 
 class MyApp extends StatelessWidget {
   @override
@@ -21,67 +20,92 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  File? _backgroundImage;
+  Database? db;
+  List<Map> rooms = [];
 
-  _pickImage() async {
-    final pickedFile = await ImagePicker().getImage(source: ImageSource.gallery);
+  TextEditingController roomNameController = TextEditingController();
 
-    if (pickedFile != null) {
-      setState(() {
-        _backgroundImage = File(pickedFile.path);
-      });
-    }
+  @override
+  void initState() {
+    super.initState();
+    initializeDatabase();
+  }
+
+  Future<void> initializeDatabase() async {
+    final Directory documentsDirectory = await getApplicationDocumentsDirectory();
+    final String path = "${documentsDirectory.path}/rooms.db";
+    db = await openDatabase(
+      path,
+      version: 1,
+      onCreate: (Database db, int version) async {
+        await db.execute("CREATE TABLE IF NOT EXISTS rooms (id INTEGER PRIMARY KEY, name TEXT)");
+      },
+    );
+    loadData();
+  }
+
+  Future<void> loadData() async {
+    final List<Map> results = await db!.query("rooms");
+    setState(() {
+      rooms = results;
+    });
+  }
+
+  Future<void> addRoom(String name) async {
+    await db!.insert("rooms", {"name": name});
+    loadData();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Room App'),
-        leading: IconButton(
-          icon: Icon(Icons.menu),
-          onPressed: () {
-            // Drawer를 여는 코드 추가
-          },
-        ),
-      ),
-      drawer: Drawer(
-        child: ListView(
-          children: [
-            ListTile(
-              title: Text("Room 1"),
-              onTap: () {
-                Navigator.pop(context);
-                // Room 1 선택 처리
+      appBar: AppBar(title: Text('Room Manager')),
+      body: rooms.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text("방이 없습니다."),
+                  ElevatedButton(
+                    onPressed: () {
+                      showAddRoomDialog();
+                    },
+                    child: Text("Room 추가"),
+                  ),
+                ],
+              ),
+            )
+          : ListView.builder(
+              itemCount: rooms.length,
+              itemBuilder: (context, index) {
+                return ListTile(title: Text(rooms[index]["name"].toString()));
               },
             ),
-            // 다른 Room들 추가
-            ListTile(
-              title: Icon(Icons.add),
-              onTap: () {
+    );
+  }
+
+  void showAddRoomDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Room 추가'),
+          content: TextField(
+            controller: roomNameController,
+            decoration: InputDecoration(labelText: '방 이름'),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () async {
+                await addRoom(roomNameController.text);
+                roomNameController.clear();
                 Navigator.pop(context);
-                // Room 추가 처리
               },
+              child: Text('추가'),
             ),
           ],
-        ),
-      ),
-      body: GestureDetector(
-        onTap: _pickImage,
-        child: Container(
-          decoration: BoxDecoration(
-            image: _backgroundImage == null
-                ? DecorationImage(
-                    image: AssetImage('assets/add_icon.png'),
-                    fit: BoxFit.cover,
-                  )
-                : DecorationImage(
-                    image: FileImage(_backgroundImage!),
-                    fit: BoxFit.cover,
-                  ),
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
